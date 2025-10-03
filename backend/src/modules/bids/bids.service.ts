@@ -243,7 +243,6 @@ export class BidsService {
             name: true,
             rating: true,
             verifiedStatus: true,
-            licenses: true,
           },
         },
         security: true,

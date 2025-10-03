@@ -4,7 +4,7 @@ export class RegisterDto {
   @IsEmail()
   email: string;
 
-  @IsPhoneNumber("ZZ") // "ZZ" for international phone numbers, adjust if specific country needed
+  @IsPhoneNumber("KZ") // "ZZ" for international phone numbers, adjust if specific country needed
   phone: string;
 
   @IsString()

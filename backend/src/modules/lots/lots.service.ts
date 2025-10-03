@@ -78,11 +78,7 @@ export class LotsService {
     });
 
     // Создание записи в аудит логе
-    await this.logTenderAction(userId, 'create_tender', lot.id, {
-      tenderNumber: lot.tenderNumber,
-      title: lot.title,
-      budget: lot.budget,
-    });
+
 
     return lot;
   }
@@ -247,9 +243,9 @@ export class LotsService {
             id: true,
             name: true,
             verifiedStatus: true,
-            binIin: true,
           },
         },
+        bids: true,
         _count: {
           select: {
             bids: true,
@@ -286,15 +282,7 @@ export class LotsService {
         customer: true,
         bids: {
           include: {
-            supplier: {
-              select: {
-                id: true,
-                name: true,
-                rating: true,
-                verifiedStatus: true,
-                binIin: true,
-              },
-            },
+            supplier: true,
           },
           orderBy: {
             createdAt: 'desc',
@@ -380,12 +368,7 @@ export class LotsService {
       },
     });
 
-    // Логирование публикации
-    await this.logTenderAction(userId, 'publish_tender', id, {
-      tenderNumber: publishedLot.tenderNumber,
-      budget: publishedLot.budget,
-      escrowCreated: !!escrowAccount,
-    });
+
 
     // Отправка уведомлений заинтересованным поставщикам
     await this.notifyInterestedSuppliers(publishedLot);
@@ -491,26 +474,7 @@ export class LotsService {
   }
 
   /**
-   * Логирование действий с тендерами
-   */
-  private async logTenderAction(userId: string, action: string, tenderId: string, details: any) {
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action,
-        entity: 'tender',
-        details: {
-          tenderId,
-          ...details,
-        },
-        ip: '0.0.0.0', // TODO: получать реальный IP
-        ua: 'system', // TODO: получать реальный User-Agent
-      },
-    });
-  }
-
-  /**
-   * Получение тендеров компании
+   * Получение списка тендеров компании
    */
   async findByCompany(userId: string, status?: string) {
     const company = await this.companiesService.findByUserId(userId);
@@ -523,6 +487,7 @@ export class LotsService {
     return this.prisma.lot.findMany({
       where,
       include: {
+        bids: true,
         _count: {
           select: {
             bids: true,
