@@ -2,9 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsOptional, IsObject, IsArray, IsNumber, Min, Max } from 'class-validator';
 
 export class CreateCompanyDto {
-  @ApiProperty({ example: '123456789012', description: 'БИН/ИИН компании' })
-  @IsString()
-  binIin: string;
+
 
   @ApiProperty({ example: 'ТОО "Строительная компания"', description: 'Наименование компании' })
   @IsString()
@@ -38,10 +36,7 @@ export class CreateCompanyDto {
 }
 
 export class UpdateCompanyDto {
-  @ApiProperty({ example: '123456789012', description: 'БИН/ИИН компании' })
-  @IsOptional()
-  @IsString()
-  binIin?: string;
+
 
   @ApiProperty({ example: 'ТОО "Строительная компания"', description: 'Наименование компании' })
   @IsOptional()

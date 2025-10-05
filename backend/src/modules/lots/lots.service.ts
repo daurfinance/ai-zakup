@@ -10,24 +10,17 @@ export class LotsService {
     private companiesService: CompaniesService,
   ) {}
 
-  /**
-   * Создание нового лота (тендера) с полной функциональностью goszakup.kz
-   */
   async create(userId: string, createLotDto: CreateLotDto) {
-    // Получение компании пользователя
     const company = await this.companiesService.findByUserId(userId);
     
     if (company.verifiedStatus !== 'verified') {
       throw new BadRequestException('Только верифицированные компании могут создавать тендеры');
     }
 
-    // Валидация данных тендера
     this.validateTenderData(createLotDto);
 
-    // Генерация номера тендера
     const tenderNumber = await this.generateTenderNumber(createLotDto.type);
 
-    // Создание лота с полной структурой
     const lot = await this.prisma.lot.create({
       data: {
         customer: {
@@ -37,8 +30,8 @@ export class LotsService {
         tenderNumber,
         title: createLotDto.title,
         description: createLotDto.description,
-        type: createLotDto.type, // goods, services, works
-        method: createLotDto.method, // open_tender, limited_tender, single_source, etc.
+        type: createLotDto.type,
+        method: createLotDto.method,
         budget: createLotDto.budget,
         currency: createLotDto.currency || 'KZT',
         region: createLotDto.region,
@@ -67,7 +60,7 @@ export class LotsService {
           additionalDocuments: createLotDto.docs?.additionalDocuments || [],
           templates: createLotDto.docs?.templates || [],
         },
-        lots: createLotDto.lots || [], // Подлоты если есть
+        lots: createLotDto.lots || [],
         contactInfo: createLotDto.contactInfo || {},
         deliveryTerms: createLotDto.deliveryTerms || {},
         paymentTerms: createLotDto.paymentTerms || {},
@@ -77,17 +70,10 @@ export class LotsService {
       },
     });
 
-    // Создание записи в аудит логе
-
-
     return lot;
   }
 
-  /**
-   * Валидация данных тендера согласно требованиям goszakup.kz
-   */
   private validateTenderData(data: CreateLotDto) {
-    // Проверка обязательных полей
     if (!data.title || data.title.length < 10) {
       throw new BadRequestException('Название тендера должно содержать минимум 10 символов');
     }
@@ -100,7 +86,6 @@ export class LotsService {
       throw new BadRequestException('Бюджет тендера должен быть больше 0');
     }
 
-    // Проверка сроков
     const now = new Date();
     const applicationStart = new Date(data.deadlines.applicationStart);
     const applicationEnd = new Date(data.deadlines.applicationEnd);
@@ -123,7 +108,6 @@ export class LotsService {
       throw new BadRequestException('Дата окончания исполнения должна быть позже даты начала');
     }
 
-    // Минимальный срок подачи заявок (7 дней для открытых тендеров)
     const minApplicationPeriod = data.method === 'open_tender' ? 7 : 3;
     const applicationPeriodDays = Math.ceil((applicationEnd.getTime() - applicationStart.getTime()) / (1000 * 60 * 60 * 24));
     
@@ -131,7 +115,6 @@ export class LotsService {
       throw new BadRequestException(`Минимальный срок подачи заявок: ${minApplicationPeriod} дней`);
     }
 
-    // Проверка типа и метода закупки
     const validTypes = ['goods', 'services', 'works'];
     const validMethods = ['open_tender', 'limited_tender', 'single_source', 'request_for_quotations'];
 
@@ -143,15 +126,11 @@ export class LotsService {
       throw new BadRequestException('Недопустимый метод закупки');
     }
 
-    // Проверка соответствия метода и бюджета
     if (data.method === 'single_source' && data.budget > 1000000) {
       throw new BadRequestException('Закупка из одного источника не может превышать 1,000,000 тенге');
     }
   }
 
-  /**
-   * Генерация номера тендера
-   */
   private async generateTenderNumber(type: string): Promise<string> {
     const year = new Date().getFullYear();
     const typePrefix = {
@@ -160,7 +139,6 @@ export class LotsService {
       works: 'W'
     }[type] || 'T';
 
-    // Получение последнего номера для данного года и типа
     const lastTender = await this.prisma.lot.findFirst({
       where: {
         tenderNumber: {
@@ -181,13 +159,9 @@ export class LotsService {
     return `${typePrefix}-${year}-${nextNumber.toString().padStart(6, '0')}`;
   }
 
-  /**
-   * Получение списка тендеров с расширенной фильтрацией
-   */
   async findAll(filters: LotFilterDto) {
     const where: any = {};
 
-    // Применение фильтров
     if (filters.region) {
       where.region = { contains: filters.region, mode: 'insensitive' };
     }
@@ -214,14 +188,12 @@ export class LotsService {
       where.status = filters.status;
     }
 
-    // Фильтр по датам
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
       if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
       if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
     }
 
-    // Поиск по тексту (морфологический поиск как в goszakup.kz)
     if (filters.search) {
       where.OR = [
         { title: { contains: filters.search, mode: 'insensitive' } },
@@ -230,7 +202,6 @@ export class LotsService {
       ];
     }
 
-    // Фильтр по номеру тендера
     if (filters.tenderNumber) {
       where.tenderNumber = { contains: filters.tenderNumber, mode: 'insensitive' };
     }
@@ -245,7 +216,6 @@ export class LotsService {
             verifiedStatus: true,
           },
         },
-        bids: true,
         _count: {
           select: {
             bids: true,
@@ -258,7 +228,7 @@ export class LotsService {
         createdAt: 'desc',
       },
       skip: filters.skip || 0,
-      take: Math.min(filters.take || 20, 100), // Максимум 100 записей за раз
+      take: Math.min(filters.take || 20, 100),
     });
 
     const total = await this.prisma.lot.count({ where });
@@ -272,9 +242,6 @@ export class LotsService {
     };
   }
 
-  /**
-   * Получение детальной информации о тендере
-   */
   async findOne(id: string, userId?: string) {
     const lot = await this.prisma.lot.findUnique({
       where: { id },
@@ -282,7 +249,14 @@ export class LotsService {
         customer: true,
         bids: {
           include: {
-            supplier: true,
+            supplier: {
+              select: {
+                id: true,
+                name: true,
+                rating: true,
+                verifiedStatus: true,
+              },
+            },
           },
           orderBy: {
             createdAt: 'desc',
@@ -302,7 +276,6 @@ export class LotsService {
       throw new NotFoundException('Тендер не найден');
     }
 
-    // Проверка прав доступа для черновиков
     if (lot.status === 'draft' && userId) {
       const company = await this.companiesService.findByUserId(userId);
       if (lot.customerCompanyId !== company.id) {
@@ -310,7 +283,6 @@ export class LotsService {
       }
     }
 
-    // Добавление вычисляемых полей
     const enrichedLot = {
       ...lot,
       daysUntilDeadline: this.calculateDaysUntilDeadline(lot.deadlines),
@@ -328,9 +300,39 @@ export class LotsService {
     return enrichedLot;
   }
 
-  /**
-   * Публикация тендера
-   */
+  async update(userId: string, id: string, updateLotDto: UpdateLotDto) {
+    const lot = await this.findOne(id);
+    const company = await this.companiesService.findByUserId(userId);
+
+    if (lot.customerCompanyId !== company.id) {
+      throw new ForbiddenException('Вы можете редактировать только свои тендеры');
+    }
+
+    if (lot.status !== 'draft') {
+      throw new BadRequestException('Можно редактировать только черновики тендеров');
+    }
+
+    return this.prisma.lot.update({
+      where: { id },
+      data: {
+        title: updateLotDto.title,
+        description: updateLotDto.description,
+        budget: updateLotDto.budget,
+        region: updateLotDto.region,
+        deadlines: updateLotDto.deadlines ? JSON.parse(JSON.stringify(updateLotDto.deadlines)) : undefined,
+        criteria: updateLotDto.criteria ? JSON.parse(JSON.stringify(updateLotDto.criteria)) : undefined,
+        docs: updateLotDto.docs ? JSON.parse(JSON.stringify(updateLotDto.docs)) : undefined,
+        contactInfo: updateLotDto.contactInfo ? JSON.parse(JSON.stringify(updateLotDto.contactInfo)) : undefined,
+        deliveryTerms: updateLotDto.deliveryTerms ? JSON.parse(JSON.stringify(updateLotDto.deliveryTerms)) : undefined,
+        paymentTerms: updateLotDto.paymentTerms ? JSON.parse(JSON.stringify(updateLotDto.paymentTerms)) : undefined,
+        updatedAt: new Date(),
+      },
+      include: {
+        customer: true,
+      },
+    });
+  }
+
   async publish(userId: string, id: string, publishData: PublishLotDto) {
     const lot = await this.findOne(id);
     const company = await this.companiesService.findByUserId(userId);
@@ -343,16 +345,13 @@ export class LotsService {
       throw new BadRequestException('Можно публиковать только черновики тендеров');
     }
 
-    // Финальная валидация перед публикацией
     this.validateTenderForPublication(lot);
 
-    // Создание эскроу счета если требуется
     let escrowAccount = null;
     if (publishData.createEscrow) {
       escrowAccount = await this.createEscrowAccount(lot, publishData.escrowDeposit);
     }
 
-    // Публикация тендера
     const publishedLot = await this.prisma.lot.update({
       where: { id },
       data: {
@@ -368,17 +367,9 @@ export class LotsService {
       },
     });
 
-
-
-    // Отправка уведомлений заинтересованным поставщикам
-    await this.notifyInterestedSuppliers(publishedLot);
-
     return publishedLot;
   }
 
-  /**
-   * Валидация тендера перед публикацией
-   */
   private validateTenderForPublication(lot: any) {
     if (!lot.title || !lot.description) {
       throw new BadRequestException('Не заполнены обязательные поля тендера');
@@ -397,11 +388,8 @@ export class LotsService {
     }
   }
 
-  /**
-   * Создание эскроу счета для тендера
-   */
   private async createEscrowAccount(lot: any, depositAmount: number) {
-    const requiredDeposit = lot.budget * 0.5; // 50% от бюджета
+    const requiredDeposit = lot.budget * 0.5;
     
     if (depositAmount < requiredDeposit) {
       throw new BadRequestException(
@@ -411,7 +399,7 @@ export class LotsService {
 
     return this.prisma.escrowAccount.create({
       data: {
-        bankId: 'default_bank', // TODO: интеграция с банковскими API
+        bankId: 'default_bank',
         lot: { connect: { id: lot.id } },
         customer: { connect: { id: lot.customerCompanyId } },
         status: 'created',
@@ -421,20 +409,165 @@ export class LotsService {
     });
   }
 
-  /**
-   * Уведомление заинтересованных поставщиков
-   */
-  private async notifyInterestedSuppliers(lot: any) {
-    // TODO: Реализация системы уведомлений
-    // - Email уведомления
-    // - SMS уведомления
-    // - Push уведомления в личном кабинете
-    console.log(`Notifying suppliers about new tender: ${lot.tenderNumber}`);
+  async findByCompany(userId: string, status?: string) {
+    const company = await this.companiesService.findByUserId(userId);
+
+    const where: any = { customerCompanyId: company.id };
+    if (status) {
+      where.status = status;
+    }
+
+    return this.prisma.lot.findMany({
+      where,
+      include: {
+        _count: {
+          select: {
+            bids: true,
+          },
+        },
+        escrowAccount: {
+          select: {
+            balance: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 
-  /**
-   * Вспомогательные методы для расчетов
-   */
+  async cancel(userId: string, id: string, reason: string) {
+    const lot = await this.findOne(id);
+    const company = await this.companiesService.findByUserId(userId);
+
+    if (lot.customerCompanyId !== company.id) {
+      throw new ForbiddenException('Вы можете отменять только свои тендеры');
+    }
+
+    if (lot.status !== 'published') {
+      throw new BadRequestException('Можно отменить только опубликованный тендер');
+    }
+
+    const cancelledLot = await this.prisma.lot.update({
+      where: { id },
+      data: {
+        status: 'cancelled',
+        cancellationReason: reason,
+        updatedAt: new Date(),
+      },
+      include: {
+        customer: true,
+      },
+    });
+
+    return cancelledLot;
+  }
+
+  async close(userId: string, id: string) {
+    const lot = await this.prisma.lot.findUnique({
+      where: { id },
+      include: { customer: true },
+    });
+
+    if (!lot) {
+      throw new NotFoundException('Тендер не найден');
+    }
+
+    if (lot.customer.id !== userId) {
+      throw new ForbiddenException('Нет прав для закрытия этого тендера');
+    }
+
+    if (lot.status !== 'published') {
+      throw new BadRequestException('Можно закрыть только опубликованный тендер');
+    }
+
+    return this.prisma.lot.update({
+      where: { id },
+      data: {
+        status: 'closed',
+        updatedAt: new Date(),
+      },
+      include: {
+        customer: {
+          include: { user: true },
+        },
+        bids: {
+          include: {
+            supplier: {
+              include: { user: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async selectWinner(id: string) {
+    const lot = await this.prisma.lot.findUnique({
+      where: { id },
+      include: {
+        bids: {
+          include: {
+            supplier: {
+              include: { user: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!lot) {
+      throw new NotFoundException('Тендер не найден');
+    }
+
+    if (lot.status !== 'published') {
+      throw new BadRequestException('Можно выбрать победителя только для опубликованного тендера');
+    }
+
+    if (!lot.bids || lot.bids.length === 0) {
+      throw new BadRequestException('Нет заявок для выбора победителя');
+    }
+
+    const winnerBid = lot.bids.reduce((prev, current) => 
+      prev.price < current.price ? prev : current
+    );
+
+    await this.prisma.lot.update({
+      where: { id },
+      data: {
+        status: 'winner_selected',
+        updatedAt: new Date(),
+      },
+    });
+
+    await this.prisma.bid.update({
+      where: { id: winnerBid.id },
+      data: {
+        status: 'winner',
+        updatedAt: new Date(),
+      },
+    });
+
+    await this.prisma.bid.updateMany({
+      where: {
+        lotId: id,
+        id: { not: winnerBid.id },
+      },
+      data: {
+        status: 'rejected',
+        updatedAt: new Date(),
+      },
+    });
+
+    return {
+      lot,
+      winnerBid,
+      message: 'Победитель выбран успешно',
+    };
+  }
+
   private calculateDaysUntilDeadline(deadlines: any): number {
     if (!deadlines.applicationEnd) return 0;
     const deadline = new Date(deadlines.applicationEnd);
@@ -471,232 +604,6 @@ export class LotsService {
   private calculateMaxBidPrice(bids: any[]): number {
     if (bids.length === 0) return 0;
     return Math.max(...bids.map(bid => bid.price));
-  }
-
-  /**
-   * Получение списка тендеров компании
-   */
-  async findByCompany(userId: string, status?: string) {
-    const company = await this.companiesService.findByUserId(userId);
-
-    const where: any = { customerCompanyId: company.id };
-    if (status) {
-      where.status = status;
-    }
-
-    return this.prisma.lot.findMany({
-      where,
-      include: {
-        bids: true,
-        _count: {
-          select: {
-            bids: true,
-          },
-        },
-        escrowAccount: {
-          select: {
-            balance: true,
-            status: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-  }
-
-  /**
-   * Обновление тендера
-   */
-  async update(userId: string, id: string, updateLotDto: UpdateLotDto) {
-    const lot = await this.findOne(id);
-    const company = await this.companiesService.findByUserId(userId);
-
-    if (lot.customerCompanyId !== company.id) {
-      throw new ForbiddenException('Вы можете редактировать только свои тендеры');
-    }
-
-    if (lot.status !== 'draft') {
-      throw new BadRequestException('Можно редактировать только черновики тендеров');
-    }
-
-    // Валидация обновляемых данных
-    if (updateLotDto.deadlines) {
-      this.validateTenderData({ ...lot, ...updateLotDto } as any);
-    }
-
-    const updatedLot = await this.prisma.lot.update({
-      where: { id },
-      data: { ...updateLotDto, deadlines: updateLotDto.deadlines as any, criteria: updateLotDto.criteria as any, docs: updateLotDto.docs as any, contactInfo: updateLotDto.contactInfo as any, deliveryTerms: updateLotDto.deliveryTerms as any, paymentTerms: updateLotDto.paymentTerms as any },
-      include: {
-        customer: true,
-      },
-    });
-
-    // Логирование изменений
-    await this.logTenderAction(userId, 'update_tender', id, {
-      changes: Object.keys(updateLotDto),
-    });
-
-    return updatedLot;
-  }
-
-  /**
-   * Отмена тендера
-   */
-  async cancel(userId: string, id: string, reason: string) {
-    const lot = await this.findOne(id);
-    const company = await this.companiesService.findByUserId(userId);
-
-    if (lot.customerCompanyId !== company.id) {
-      throw new ForbiddenException('Вы можете отменять только свои тендеры');
-    }
-
-    if (!['draft', 'published'].includes(lot.status)) {
-      throw new BadRequestException('Нельзя отменить тендер в текущем статусе');
-    }
-
-    const cancelledLot = await this.prisma.lot.update({
-      where: { id },
-      data: {
-        status: 'cancelled',
-        cancellationReason: reason,
-        cancelledAt: new Date(),
-      },
-    });
-
-    // Логирование отмены
-    await this.logTenderAction(userId, 'cancel_tender', id, {
-      reason,
-      previousStatus: lot.status,
-    });
-
-    // Уведомление участников об отмене
-    await this.notifyTenderCancellation(lot, reason);
-
-    return cancelledLot;
-  }
-
-  /**
-   * Уведомление об отмене тендера
-   */
-  private async notifyTenderCancellation(lot: any, reason: string) {
-    // TODO: Реализация уведомлений об отмене
-    console.log(`Tender ${lot.tenderNumber} cancelled: ${reason}`);
-  }
-
-  /**
-   * Close a tender
-   */
-  async close(userId: string, id: string) {
-    const lot = await this.prisma.lot.findUnique({
-      where: { id },
-      include: { customer: true },
-    });
-
-    if (!lot) {
-      throw new NotFoundException("Тендер не найден");
-    }
-
-    if (lot.customer.id !== userId) {
-      throw new ForbiddenException("Нет прав для закрытия этого тендера");
-    }
-
-    if (lot.status !== "published") {
-      throw new BadRequestException("Можно закрыть только опубликованный тендер");
-    }
-
-    return this.prisma.lot.update({
-      where: { id },
-      data: {
-        status: "closed",
-        updatedAt: new Date(),
-      },
-      include: {
-        customer: {
-          include: { user: true },
-        },
-        bids: {
-          include: {
-            supplier: {
-              include: { user: true },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  /**
-   * Select winner for a tender
-   */
-  async selectWinner(id: string) {
-    const lot = await this.prisma.lot.findUnique({
-      where: { id },
-      include: {
-        bids: {
-          include: {
-            supplier: {
-              include: { user: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!lot) {
-      throw new NotFoundException("Тендер не найден");
-    }
-
-    if (lot.status !== "published") {
-      throw new BadRequestException("Можно выбрать победителя только для опубликованного тендера");
-    }
-
-    if (!lot.bids || lot.bids.length === 0) {
-      throw new BadRequestException("Нет заявок для выбора победителя");
-    }
-
-    // Simple winner selection logic - lowest price
-    const winnerBid = lot.bids.reduce((prev, current) => 
-      prev.price < current.price ? prev : current
-    );
-
-    // Update lot status
-    await this.prisma.lot.update({
-      where: { id },
-      data: {
-        status: "winner_selected",
-        updatedAt: new Date(),
-      },
-    });
-
-    // Update winner bid status
-    await this.prisma.bid.update({
-      where: { id: winnerBid.id },
-      data: {
-        status: "winner",
-        updatedAt: new Date(),
-      },
-    });
-
-    // Update other bids to rejected
-    await this.prisma.bid.updateMany({
-      where: {
-        lotId: id,
-        id: { not: winnerBid.id },
-      },
-      data: {
-        status: "rejected",
-        updatedAt: new Date(),
-      },
-    });
-
-    return {
-      lot,
-      winnerBid,
-      message: "Победитель выбран успешно",
-    };
   }
 }
 

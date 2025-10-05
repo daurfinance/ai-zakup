@@ -14,10 +14,13 @@ model User {
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  company   Company? @relation(name: "UserToCompany")
 }
 
 model Company {
   id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(name: "UserToCompany", fields: [userId], references: [id])
   name            String
   type            String
   address         String
@@ -175,8 +178,6 @@ model Dispute {
   updatedAt   DateTime @updatedAt
 }
 
-
-
 model Fee {
   id          String   @id @default(cuid())
   type        String
@@ -229,3 +230,4 @@ model Notification {
   @@index([userId])
   @@index([status])
 }
+

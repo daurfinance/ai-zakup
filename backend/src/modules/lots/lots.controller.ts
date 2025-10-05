@@ -13,7 +13,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { LotsService } from './lots.service';
-import { CreateLotDto, UpdateLotDto } from './dto/lot.dto';
+import { CreateLotDto, UpdateLotDto, LotFilterDto, PublishLotDto } from './dto/lot.dto';
 
 @ApiTags('Lots')
 @Controller('lots')
@@ -98,8 +98,12 @@ export class LotsController {
   @ApiResponse({ status: 400, description: 'Лот уже опубликован или не готов к публикации' })
   @ApiResponse({ status: 403, description: 'Недостаточно прав' })
   @Post(':id/publish')
-  publish(@Request() req, @Param('id') id: string) {
-    return this.lotsService.publish(req.user.sub, id, { createEscrow: false });
+  publish(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() publishLotDto: PublishLotDto,
+  ) {
+    return this.lotsService.publish(req.user.sub, id, publishLotDto);
   }
 
   @ApiOperation({ summary: 'Закрытие лота' })
@@ -115,21 +119,25 @@ export class LotsController {
   @ApiResponse({ status: 200, description: 'Победитель выбран' })
   @ApiResponse({ status: 400, description: 'Нельзя выбрать победителя' })
   @ApiResponse({ status: 403, description: 'Недостаточно прав' })
-  @Post(':id/select-winner/:bidId')
+  @Post(':id/select-winner')
   selectWinner(
     @Request() req,
     @Param('id') id: string,
-    @Param('bidId') bidId: string,
   ) {
     return this.lotsService.selectWinner(id);
   }
 
-  @ApiOperation({ summary: 'Удаление лота' })
-  @ApiResponse({ status: 200, description: 'Лот удален' })
-  @ApiResponse({ status: 400, description: 'Нельзя удалить опубликованный лот' })
+  @ApiOperation({ summary: 'Отмена лота' })
+  @ApiResponse({ status: 200, description: 'Лот отменен' })
+  @ApiResponse({ status: 400, description: 'Нельзя отменить опубликованный лот' })
   @ApiResponse({ status: 403, description: 'Недостаточно прав' })
   @Delete(':id')
-  remove(@Request() req, @Param('id') id: string) {
-    return this.lotsService.cancel(req.user.sub, id, 'Tender removed by owner');
+  cancel(
+    @Request() req,
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.lotsService.cancel(req.user.sub, id, reason);
   }
 }
+

@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto, UpdateCompanyDto } from './dto/company.dto';
+import { Company } from '@prisma/client';
 
 @Injectable()
 export class CompaniesService {
@@ -20,32 +21,17 @@ export class CompaniesService {
       throw new BadRequestException('У пользователя уже есть зарегистрированная компания');
     }
 
-    // Проверка уникальности БИН/ИИН
-    const existingCompany = await this.prisma.company.findUnique({
-      where: { binIin: createCompanyDto.binIin },
-    });
-
-    if (existingCompany) {
-      throw new BadRequestException('Компания с таким БИН/ИИН уже зарегистрирована');
-    }
-
-    // Создание компании
+    // Создание компании и связывание с пользователем
     const company = await this.prisma.company.create({
       data: {
         ...createCompanyDto,
-
-        address: createCompanyDto.address || '',
+        userId: userId,
+        address: createCompanyDto.address || "",
         bankReqs: createCompanyDto.bankReqs || {},
-        verifiedStatus: 'draft',
+        verifiedStatus: "draft",
         rating: 0,
         blacklistFlag: false,
       },
-    });
-
-    // Привязка компании к пользователю
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { companyId: company.id },
     });
 
     return company;
@@ -54,17 +40,21 @@ export class CompaniesService {
   /**
    * Получение профиля компании по ID пользователя
    */
-  async findByUserId(userId: string) {
-    const user = await this.prisma.user.findUnique({
+  async findByUserId(userId: string): Promise<Company> {
+    const userWithCompany = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { company: true },
     });
 
-    if (!user?.company) {
-      throw new NotFoundException('Компания не найдена');
+    if (!userWithCompany) {
+      throw new NotFoundException("Пользователь не найден");
     }
 
-    return user.company;
+    if (!userWithCompany.company) {
+      throw new NotFoundException("Компания не найдена для данного пользователя");
+    }
+
+    return userWithCompany.company;
   }
 
   /**
@@ -73,17 +63,6 @@ export class CompaniesService {
   async findOne(id: string) {
     const company = await this.prisma.company.findUnique({
       where: { id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            phone: true,
-            status: true,
-            lastLogin: true,
-          },
-        },
-      },
     });
 
     if (!company) {
@@ -106,19 +85,8 @@ export class CompaniesService {
       throw new NotFoundException('Компания не найдена');
     }
 
-    // Если обновляется БИН/ИИН, проверяем уникальность
-    if (updateCompanyDto.binIin && updateCompanyDto.binIin !== user.company.binIin) {
-      const existingCompany = await this.prisma.company.findUnique({
-        where: { binIin: updateCompanyDto.binIin },
-      });
-
-      if (existingCompany) {
-        throw new BadRequestException('Компания с таким БИН/ИИН уже зарегистрирована');
-      }
-    }
-
     return this.prisma.company.update({
-      where: { id: user.company.id },
+      where: { userId: userId },
       data: updateCompanyDto,
     });
   }
@@ -158,7 +126,7 @@ export class CompaniesService {
     }
 
     return this.prisma.company.update({
-      where: { id: user.company.id },
+      where: { userId: userId },
       data: { licenses },
     });
   }
@@ -245,3 +213,4 @@ export class CompaniesService {
     });
   }
 }
+

@@ -211,10 +211,20 @@ export class UpdateLotDto {
   @Min(1)
   budget?: number;
 
+  @ApiProperty({ description: 'Валюта', required: false })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
   @ApiProperty({ description: 'Регион проведения', required: false })
   @IsOptional()
   @IsString()
   region?: string;
+
+  @ApiProperty({ description: 'Подлоты', required: false })
+  @IsOptional()
+  @IsArray()
+  lots?: any[];
 
   @ApiProperty({ description: 'Сроки тендера', required: false })
   @IsOptional()
